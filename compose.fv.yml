@@ -1,0 +1,21 @@
+services:
+  app:
+    image: 'git.toast-server.net/toast/field-ownership-viewer:latest'
+    environment:
+      FS_IP: ''
+      FS_MD5: ''
+    networks:
+      - traefik-pub
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      labels:
+        - traefik.http.routers.fieldviewer_main.rule=Host(``)
+        - traefik.http.routers.fieldviewer_local.rule=Host(``)
+        - traefik.http.services.fieldviewer.loadbalancer.server.port=3030
+
+networks:
+  traefik-pub:
+    external: true

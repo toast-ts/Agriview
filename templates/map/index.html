@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }}</title>
+  <style>
+    body {
+      margin: 0;
+      padding-top: 1.2rem;
+      padding-bottom: 1.2rem;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+      border: 4px solid #000;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="farmlandCanvas" width="1920" height="1080"></canvas>
+  <script>
+    let canvasDebug = false;
+    const fetchFields = {{ rs_fetch_fields|safe }};
+
+    async function drawFarmlands() {
+      const farmlandData = fetchFields;
+
+      const minX = Math.min(...farmlandData.fields.map(field=>field.x));
+      const minY = Math.min(...farmlandData.fields.map(field=>field.z));
+      const maxX = Math.max(...farmlandData.fields.map(field=>field.x));
+      const maxY = Math.max(...farmlandData.fields.map(field=>field.z));
+
+      const canvas = document.getElementById('farmlandCanvas');
+      canvas.width = maxX - minX + 100;
+      canvas.height = maxY - minY + 100;
+      const ctx = canvas.getContext('2d');
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const overlay = new Image();
+      overlay.onload = function() {
+        const cropX = 512;
+        const cropY = 512;
+        const cropW = 1024;
+        const cropH = 1024;
+        ctx.drawImage(overlay, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+
+        // Draw grid lines
+        if (canvasDebug) {
+          const gridSize = 50;
+          ctx.beginPath();
+          for (let x = 0; x < canvas.width; x += gridSize) {
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+          }
+          for (let y = 0; y < canvas.height; y += gridSize) {
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+          }
+          ctx.strokeStyle = '#ccc';
+          ctx.stroke();
+        }
+
+        // Loop through each field and draw it
+        for (const key in farmlandData.fields) {
+          if (farmlandData.fields.hasOwnProperty(key)) {
+            const field = farmlandData.fields[key];
+            console.log(`Drawing Field ${field.id} at (${field.x}, ${field.z})`);
+
+            const fieldX = field.x - minX + 25;
+            const fieldZ = field.z - minY + 25;
+            const width = 40;
+            const height = 40;
+            const color = field.isOwned ? 'green' : 'red';
+
+            // Draw farmland
+            ctx.fillStyle = color;
+            ctx.fillRect(fieldX, fieldZ, width, height);
+
+            // Draw field #
+            ctx.fillStyle = 'white';
+            const fieldNo = field.id;
+            const textX = fieldX + width / 2;
+            const textY = fieldZ + height / 2;
+            ctx.font = `${13 * (canvas.width / cropW)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(fieldNo, textX, textY);
+          }
+        }
+      }
+      overlay.src = 'data:image/jpeg;base64,{{ rs_fetch_map|safe }}';
+    }
+
+    drawFarmlands();
+  </script>
+</body>
+</html>
