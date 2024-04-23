@@ -24,15 +24,13 @@
   <canvas id="farmlandCanvas" width="1920" height="1080"></canvas>
   <script>
     let canvasDebug = false;
-    const fetchFields = {{ rs_fetch_fields|safe }};
-
     async function drawFarmlands() {
-      const farmlandData = fetchFields;
+      const farmlandData = {{ rs_fetch_fields|safe }};
 
-      const minX = Math.min(...farmlandData.fields.map(field=>field.x));
-      const minY = Math.min(...farmlandData.fields.map(field=>field.z));
-      const maxX = Math.max(...farmlandData.fields.map(field=>field.x));
-      const maxY = Math.max(...farmlandData.fields.map(field=>field.z));
+      const minX = Math.min(...farmlandData.map(field=>field.x));
+      const minY = Math.min(...farmlandData.map(field=>field.z));
+      const maxX = Math.max(...farmlandData.map(field=>field.x));
+      const maxY = Math.max(...farmlandData.map(field=>field.z));
 
       const canvas = document.getElementById('farmlandCanvas');
       canvas.width = maxX - minX + 100;
@@ -66,9 +64,9 @@
         }
 
         // Loop through each field and draw it
-        for (const key in farmlandData.fields) {
-          if (farmlandData.fields.hasOwnProperty(key)) {
-            const field = farmlandData.fields[key];
+        for (const key in farmlandData) {
+          if (farmlandData.hasOwnProperty(key)) {
+            const field = farmlandData[key];
             console.log(`Drawing Field ${field.id} at (${field.x}, ${field.z})`);
 
             const fieldX = field.x - minX + 25;

@@ -1,4 +1,15 @@
 use warp::Filter;
+use tokio::time::{
+  Duration,
+  sleep
+};
+use std::{
+  env::var,
+  sync::{
+    Arc,
+    Mutex
+  }
+};
 use reqwest::{
   Client,
   Error
@@ -11,19 +22,63 @@ use base64::{
   engine::general_purpose,
   Engine as _
 };
-use std::env::var;
 
 struct FSGameserverCon {
   ip: String,
   md5: String
 } // This is temporary until I am satisfied with the page design.
 
+struct MemoryCache {
+  fields: Option<serde_json::Value>,
+  map: Option<Vec<u8>>
+}
+
+impl MemoryCache {
+  async fn update(&mut self, ip: &str, md5: &str) {
+    self.fields = fetch_fields(ip, md5).await.ok();
+    self.map = fetch_map_overlay(ip, md5).await.ok();
+  }
+}
+
+async fn periodic_cache_update(cache: Arc<Mutex<MemoryCache>>, ip: &str, md5: &str) {
+  loop {
+    sleep(Duration::from_secs(60)).await;
+    let mut cache = cache.lock().unwrap();
+    cache.update(ip, md5).await;
+    println!(" Web::[ In-memory cache updated ]")
+  }
+}
+
 #[tokio::main]
 async fn main() {
+  let gameserver_con = FSGameserverCon {
+    ip: var("FS_IP").unwrap().to_string(),
+    md5: var("FS_MD5").unwrap().to_string()
+  };
+  let cache = Arc::new(Mutex::new(MemoryCache {
+    fields: None,
+    map: None
+  }));
+
+  {
+    let mut cache = cache.lock().unwrap();
+    cache.update(&gameserver_con.ip, &gameserver_con.md5).await;
+    println!(" Web::[ Initial in-memory cache populated ]")
+  }
+
+  let cache_clone = Arc::clone(&cache);
+  tokio::task::spawn_blocking(move || {
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+      periodic_cache_update(cache_clone, &gameserver_con.ip, &gameserver_con.md5).await;
+    });
+  });
+
   let tera = warp::any().map(move || Tera::new("templates/**/*").unwrap());
+  let cache_filter = warp::any().map(move || Arc::clone(&cache));
 
   let map_route = warp::path!("map")
     .and(tera.clone())
+    .and(cache_filter.clone())
     .and_then(map_handler);
 
   let logger = warp::log::custom(|i| {
@@ -42,32 +97,26 @@ async fn main() {
   warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
 }
 
-async fn map_handler(tera: Tera) -> Result<impl warp::Reply, warp::Rejection> {
+async fn map_handler(tera: Tera, cache: Arc<Mutex<MemoryCache>>) -> Result<impl warp::Reply, warp::Rejection> {
   let mut context = Context::new();
-  context.insert("title", "Field Ownership Viewer");
+  context.insert("title", "Agriview");
 
-  let gameserver_con = FSGameserverCon {
-    ip: var("FS_IP").unwrap().to_string(),
-    md5: var("FS_MD5").unwrap().to_string()
-  };
+  let cache = cache.lock().unwrap();
 
-  let rs_fetch_fields = fetch_fields(&gameserver_con.ip, &gameserver_con.md5).await;
-  let rs_fetch_map = fetch_map_overlay(&gameserver_con.ip, &gameserver_con.md5).await;
-
-  match rs_fetch_fields {
-    Ok(fields) => {
-      let json = serde_json::to_string(&fields).unwrap();
+  match &cache.fields {
+    Some(fields) => {
+      let json = serde_json::to_string(fields).unwrap();
       context.insert("rs_fetch_fields", &json);
     },
-    Err(_) => context.insert("rs_fetch_fields", "null")
+    None => context.insert("rs_fetch_fields", "null")
   }
 
-  match rs_fetch_map {
-    Ok(map) => {
-      let map_base64 = general_purpose::STANDARD.encode(&map);
+  match &cache.map {
+    Some(map) => {
+      let map_base64 = general_purpose::STANDARD.encode(map);
       context.insert("rs_fetch_map", &map_base64);
     },
-    Err(_) => context.insert("rs_fetch_map", "null")
+    None => context.insert("rs_fetch_map", "null")
   }
 
   let rendered = tera.render("map/index.html", &context).unwrap();
@@ -88,7 +137,8 @@ async fn fetch_fields(server_ip: &str, md5: &str) -> Result<serde_json::Value, E
   let url = format!("http://{}/feed/dedicated-server-stats.json?code={}", server_ip, md5);
   let client = Client::new();
   let resp = client.get(&url).send().await?;
-  let json = resp.json().await?;
+  let mut json: serde_json::Value = resp.json().await?;
+  let fields = json["fields"].take(); // We only want the fields object and not the entire JSON data from the gameserver
 
-  Ok(json)
+  Ok(fields)
 }

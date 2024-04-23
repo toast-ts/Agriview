@@ -1,2 +1,6 @@
 target
+compose.av.yml
+docker-compose.yml
+Dockerfile
 x.sh
+z.sh

@@ -1,5 +1,5 @@
 [package]
-name = "field-viewer"
+name = "agriview"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,7 +12,7 @@ tokio = { version = "1.37.0", features = ["rt-multi-thread", "macros"] }
 warp = "0.3.7"
 
 [[bin]]
-name = "field-viewer"
+name = "agriview"
 path = "src/main.rs"
 
 [profile.dev]

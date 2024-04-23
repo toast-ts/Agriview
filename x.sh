@@ -1,3 +1,3 @@
 #!/bin/bash
 
-clear && cargo build && ./target/debug/field-viewer
+clear && cargo build && ./target/debug/agriview
