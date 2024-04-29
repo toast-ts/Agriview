@@ -5,6 +5,7 @@ use tokio::time::{
 };
 use std::{
   env::var,
+  time::SystemTime,
   sync::{
     Arc,
     Mutex
@@ -30,13 +31,16 @@ struct FSGameserverCon {
 
 struct MemoryCache {
   fields: Option<serde_json::Value>,
-  map: Option<Vec<u8>>
+  map: Option<Vec<u8>>,
+  last_pull: Option<u64>
 }
 
 impl MemoryCache {
   async fn update(&mut self, ip: &str, md5: &str) {
     self.fields = fetch_fields(ip, md5).await.ok();
     self.map = fetch_map_overlay(ip, md5).await.ok();
+    let now = SystemTime::now();
+    self.last_pull = now.duration_since(SystemTime::UNIX_EPOCH).ok().map(|d| d.as_secs());
   }
 }
 
@@ -51,19 +55,22 @@ async fn periodic_cache_update(cache: Arc<Mutex<MemoryCache>>, ip: &str, md5: &s
 
 #[tokio::main]
 async fn main() {
+  println!(" Web::[ {} threads assigned to Tokio ]", num_cpus::get());
+
   let gameserver_con = FSGameserverCon {
     ip: var("FS_IP").unwrap().to_string(),
     md5: var("FS_MD5").unwrap().to_string()
   };
   let cache = Arc::new(Mutex::new(MemoryCache {
     fields: None,
-    map: None
+    map: None,
+    last_pull: None
   }));
 
   {
     let mut cache = cache.lock().unwrap();
     cache.update(&gameserver_con.ip, &gameserver_con.md5).await;
-    println!(" Web::[ Initial in-memory cache populated ]")
+    println!(" Web::[ Initial in-memory cache populated ]");
   }
 
   let cache_clone = Arc::clone(&cache);
@@ -81,6 +88,9 @@ async fn main() {
     .and(cache_filter.clone())
     .and_then(map_handler);
 
+  let favicon_route = warp::path!("favicon.ico")
+    .map(|| warp::reply::with_status(warp::reply::html(""), warp::http::StatusCode::OK));
+
   let logger = warp::log::custom(|i| {
     println!(
       " Web::[ {} ][ {} ][ {} ][ {:?} ][ {} ]",
@@ -92,7 +102,9 @@ async fn main() {
     )
   });
 
-  let routes = map_route.with(logger);
+  let routes = map_route
+    .or(favicon_route)
+    .with(logger);
 
   warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
 }
@@ -107,6 +119,7 @@ async fn map_handler(tera: Tera, cache: Arc<Mutex<MemoryCache>>) -> Result<impl 
     Some(fields) => {
       let json = serde_json::to_string(fields).unwrap();
       context.insert("rs_fetch_fields", &json);
+      context.insert("rs_fetch_last_updated", &cache.last_pull.unwrap());
     },
     None => context.insert("rs_fetch_fields", "null")
   }

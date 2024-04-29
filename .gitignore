@@ -1,4 +1,7 @@
 target
+y.sh
+y1.sh
+.env
 
 # Development container
 docker-compose.yml

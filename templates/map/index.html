@@ -1,10 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang='en'>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <meta theme-color='#0052cf'>
   <title>{{ title }}</title>
   <style>
+    header {
+      top: 0;
+      left: 0;
+      width: 100%;
+      position: absolute;
+      background-color: #0052cf;
+      color: white;
+      text-align: center;
+      padding: 0 0;
+      font-size: 12px;
+      font-family: system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    }
     body {
       margin: 0;
       padding-top: 1.2rem;
@@ -12,18 +25,38 @@
       overflow: auto;
       display: flex;
       align-items: center;
+      background-color: #333;
     }
-    canvas {
+    #canvasContainer {
       display: block;
       margin: auto;
+      margin-top: 3rem;
+    }
+    #farmlandCanvas {
       border: 4px solid #000;
+      border-radius: 10px;
     }
   </style>
 </head>
 <body>
-  <canvas id="farmlandCanvas" width="1920" height="1080"></canvas>
+  <header>
+    <h1>?</h1>
+  </header>
+  <div id='canvasContainer' style='width: 1250px; height: 1250;'>
+    <canvas id="farmlandCanvas" style='width: 100%; height: 100%;'></canvas>
+  </div>
   <script>
-    let canvasDebug = false;
+    let epoch = '{{ rs_fetch_last_updated }}';
+    let date = new Date(epoch * 1000);
+
+    let hour = ('0' + date.getHours()).slice(-2);
+    let minute = ('0' + date.getMinutes()).slice(-2);
+    let second = ('0' + date.getSeconds()).slice(-2);
+
+    let formattedDate = `${hour}:${minute}:${second}`;
+    document.querySelector('header h1').textContent = `Cache last updated: ${formattedDate}`;
+  </script>
+  <script>
     async function drawFarmlands() {
       const farmlandData = {{ rs_fetch_fields|safe }};
 
@@ -33,44 +66,30 @@
       const maxY = Math.max(...farmlandData.map(field=>field.z));
 
       const canvas = document.getElementById('farmlandCanvas');
-      canvas.width = maxX - minX + 100;
-      canvas.height = maxY - minY + 100;
       const ctx = canvas.getContext('2d');
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const overlay = new Image();
       overlay.onload = function() {
+        console.log(`Latest cache in Epoch: {{ rs_fetch_last_updated }}`);
+
+        canvas.width = maxX - minX + 150;
+        canvas.height = maxY - minY + 150;
+
         const cropX = 512;
         const cropY = 512;
         const cropW = 1024;
         const cropH = 1024;
         ctx.drawImage(overlay, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
 
-        // Draw grid lines
-        if (canvasDebug) {
-          const gridSize = 50;
-          ctx.beginPath();
-          for (let x = 0; x < canvas.width; x += gridSize) {
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, canvas.height);
-          }
-          for (let y = 0; y < canvas.height; y += gridSize) {
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
-          }
-          ctx.strokeStyle = '#ccc';
-          ctx.stroke();
-        }
-
         // Loop through each field and draw it
         for (const key in farmlandData) {
           if (farmlandData.hasOwnProperty(key)) {
             const field = farmlandData[key];
-            console.log(`Drawing Field ${field.id} at (${field.x}, ${field.z})`);
 
-            const fieldX = field.x - minX + 25;
-            const fieldZ = field.z - minY + 25;
+            const fieldX = field.x - minX + 20;
+            const fieldZ = field.z - minY + 50;
             const width = 40;
             const height = 40;
             const color = field.isOwned ? 'green' : 'red';
