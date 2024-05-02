@@ -1,4 +1,4 @@
-FROM clux/muslrust:stable-2024-05-01 AS chef
+FROM clux/muslrust:1.77.2-stable AS chef
 RUN cargo install cargo-chef
 WORKDIR /usr/src/av
 
@@ -14,4 +14,5 @@ RUN cargo build -r --target x86_64-unknown-linux-musl
 
 FROM alpine:3.19
 COPY --from=builder /usr/src/av/target/x86_64-unknown-linux-musl/release/agriview .
+COPY --from=builder /usr/src/av/templates templates/
 CMD ./agriview
