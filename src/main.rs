@@ -121,7 +121,7 @@ async fn map_handler(tera: Tera, cache: Arc<Mutex<MemoryCache>>) -> Result<impl 
       context.insert("rs_fetch_fields", &json);
       context.insert("rs_fetch_last_updated", &cache.last_pull.unwrap());
     },
-    None => context.insert("rs_fetch_fields", "null")
+    None => context.insert("rs_fetch_fields", "API turned up empty")
   }
 
   match &cache.map {
@@ -151,6 +151,11 @@ async fn fetch_fields(server_ip: &str, md5: &str) -> Result<serde_json::Value, E
   let client = Client::new();
   let resp = client.get(&url).send().await?;
   let mut json: serde_json::Value = resp.json().await?;
+
+  // Check if the server's name value is empty, if so then notify the frontend that the API returned empty data.
+  if json["server"]["name"].as_str().unwrap_or("").is_empty() {
+    return Ok(serde_json::Value::String("API turned up empty".to_string()));
+  }
   let fields = json["fields"].take(); // We only want the fields object and not the entire JSON data from the gameserver
 
   Ok(fields)

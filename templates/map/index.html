@@ -16,7 +16,6 @@
       text-align: center;
       padding: 0 0;
       font-size: 12px;
-      font-family: system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     }
     body {
       margin: 0;
@@ -26,6 +25,7 @@
       display: flex;
       align-items: center;
       background-color: #333;
+      font-family: system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     }
     #canvasContainer {
       display: block;
@@ -36,6 +36,15 @@
       border: 4px solid #000;
       border-radius: 10px;
     }
+    #errorMessage {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      font-size: 1.5rem;
+      color: #fff
+    }
   </style>
 </head>
 <body>
@@ -43,7 +52,8 @@
     <h1>?</h1>
   </header>
   <div id='canvasContainer' style='width: 1250px; height: 1250;'>
-    <canvas id="farmlandCanvas" style='width: 100%; height: 100%;'></canvas>
+    <div id='errorMessage'></div>
+    <canvas id='farmlandCanvas' style='width: 100%; height: 100%;'></canvas>
   </div>
   <script>
     let epoch = '{{ rs_fetch_last_updated }}';
@@ -58,15 +68,24 @@
   </script>
   <script>
     async function drawFarmlands() {
+      const errorMessage = document.getElementById('errorMessage');
+      const canvas = document.getElementById('farmlandCanvas');
+      const ctx = canvas.getContext('2d');
+
       const farmlandData = {{ rs_fetch_fields|safe }};
+      if (typeof farmlandData === 'string') {
+        canvas.style.display = 'none';
+        errorMessage.innerHTML = `Could not contact the gameserver<br>Reason: ${farmlandData}`;
+        return;
+      } else {
+        canvas.style.display = 'block';
+        errorMessage.textContent = '';
+      }
 
       const minX = Math.min(...farmlandData.map(field=>field.x));
       const minY = Math.min(...farmlandData.map(field=>field.z));
       const maxX = Math.max(...farmlandData.map(field=>field.x));
       const maxY = Math.max(...farmlandData.map(field=>field.z));
-
-      const canvas = document.getElementById('farmlandCanvas');
-      const ctx = canvas.getContext('2d');
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
